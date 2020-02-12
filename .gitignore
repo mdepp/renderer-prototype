@@ -1,0 +1,9 @@
+# Documentation
+docs/html
+docs/latex
+
+# Build files
+cmake-*
+
+# Project files
+.idea
