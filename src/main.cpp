@@ -101,7 +101,7 @@ struct Face {
 
 
 /**
- * @brief Compute barycentric coordinates of a point given a 2d triangle
+ * @brief Computes barycentric coordinates of a point given a 2d triangle
  *
  * See https://en.wikipedia.org/wiki/Barycentric_coordinate_system
  *
@@ -195,7 +195,7 @@ void perspective_transform(const std::vector<glm::vec4>& positions_clip, std::ve
  * @param indices Indices defining face vertices. Each consecutive three indices should form a face.
  * @param positions_clip Vertex positions in clip space.
  * @param positions_window Vertex positions in window space.
- * @param functor The function to execute. Should have a signiture like `void(glm::ivec3 face_indices, glm::ivec2 position_window, glm::vec3 barycentric)`
+ * @param functor The function to execute. Should have a signature like `void(glm::ivec3 face_indices, glm::ivec2 position_window, glm::vec3 barycentric)`
  *     where `face_indices` are the indices of each vertex in the face, `position_window` is the window space coordinate
  */
 template<typename Functor>
