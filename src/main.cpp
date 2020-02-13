@@ -196,7 +196,8 @@ void perspective_transform(const std::vector<glm::vec4>& positions_clip, std::ve
  * @param positions_clip Vertex positions in clip space.
  * @param positions_window Vertex positions in window space.
  * @param functor The function to execute. Should have a signature like `void(glm::ivec3 face_indices, glm::ivec2 position_window, glm::vec3 barycentric)`
- *     where `face_indices` are the indices of each vertex in the face, `position_window` is the window space coordinate
+ *     where `face_indices` are the indices of each vertex in the face, `position_window` is the window space coordinates
+ *     of the pixel, and `barycentric` is the clip-space barycentric coordinates of the pixel.
  */
 template<typename Functor>
 void fragment_shader_pass(const std::vector<size_t>& indices, const std::vector<glm::vec4>& positions_clip, const std::vector<glm::vec2>& positions_window, Functor&& functor) {
