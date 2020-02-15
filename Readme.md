@@ -9,4 +9,5 @@ I intend to loosely mimic some parts of OpenGL (e.g. its general transforms and 
 The goal is to enable experimentation with semi-modern rendering techniques in a way that is clearer and easier to write than using something like shaders in OpenGL.
 
 What it it does so far:
+
 ![](docs/preview.gif)
