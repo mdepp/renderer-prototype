@@ -12,10 +12,12 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <cmath>
 #include <chrono>
+#include "texture.hpp"
 
 
 using buffer::Buffer;
 using app::ApplicationWindow;
+using texture::load_texture;
 
 
 void apply_matrix(const std::vector<glm::vec3>& vertices, const glm::mat4& matrix, std::vector<glm::vec4>& result) {
@@ -232,6 +234,20 @@ glm::mat4 make_perspective_transform(float fovy, float aspect_ratio, float near_
     }) * perspective;
 }
 
+/**
+ * Sample a texture at specific texture coordinate
+ * @tparam T Type of pixel in the texture (e.g. glm::vec3)
+ * @param buffer The texture to sample
+ * @param texcoord Texture coordinate to sample. (0,0) samples buffer.at({0,0}); (1,1)
+ *     samples buffer.at({width-1, height-1}). Values outside this range are wrapped to repeat the texture.
+ * @return Pixel value of the texture at the coordinate
+ */
+template<typename T>
+inline T sample_texture(const Buffer<T>& buffer, const glm::vec2& texcoord) {
+    const auto x = (static_cast<int>(texcoord.x * (buffer.width()-1)) + buffer.width()) % buffer.width();
+    const auto y = (static_cast<int>(texcoord.y * (buffer.height()-1)) + buffer.height()) % buffer.height();
+    return buffer.at({x, y});
+}
 
 int main() {
     // Configuration
@@ -245,29 +261,30 @@ int main() {
 
     // Define geometry
     const std::vector<glm::vec3> positions_model = {
-            {0.f, -0.5f, 0.577f},
-            {0.f, -0.5f, -0.577f},
-            {0.f, 0.5f, 0.f},
-            {0.2f, -0.5f, 0.577f},
-            {0.2f, -0.5f, -0.577f},
-            {0.2f, 0.5f, 0.f},
+            {0.f, -1.f, -1.f},
+            {0.f, -1.f, 1.f},
+            {0.f, 1.f, 1.f},
+            {0.2f, 1.f, 1.f},
+            {0.2f, 1.f, -1.f},
+            {0.2f, -1.f, -1.f},
 
     };
-    const std::vector<glm::vec3> colours = {
-            {1.f, 0.f, 0.f},
-            {0.f, 1.f, 0.0},
-            {0.f, 0.f, 1.f},
-            {1.f, 0.f, 0.f},
-            {1.f, 0.f, 0.f},
-            {1.f, 0.f, 0.f},
+    const std::vector<size_t> indices = {0, 1, 2, 4, 5, 6};
+    auto diffuse_texture = load_texture("../src/image/falcon-heavy.jpg");
+    const std::vector<glm::vec2> texcoords = {
+            {0.f, 0.f},
+            {1.f, 0.f},
+            {1.f, 1.f},
+            {1.f, 1.f},
+            {0.f, 1.f},
+            {0.f, 0.f},
     };
-    const std::vector<size_t> indices = {0, 1, 2, 3, 4, 5};
 
     // Define buffers
     Buffer<glm::vec3> screen_buffer(SCREEN_WIDTH, SCREEN_HEIGHT);
     Buffer<float> depth_buffer(SCREEN_WIDTH, SCREEN_HEIGHT, std::numeric_limits<float>::lowest());
     Buffer<glm::vec4> position_clip_buffer(SCREEN_WIDTH, SCREEN_HEIGHT);
-    Buffer<glm::vec3> colour_buffer(SCREEN_WIDTH, SCREEN_HEIGHT);
+    Buffer<glm::vec3> diffuse_buffer(SCREEN_WIDTH, SCREEN_HEIGHT);
 
     // Define transforms
     const auto window_transform = make_matrix<3>({
@@ -317,7 +334,7 @@ int main() {
         // Update position + colour buffers from geometry
         depth_buffer.clear();
         position_clip_buffer.clear();
-        colour_buffer.clear();
+        diffuse_buffer.clear();
         fragment_shader_pass(indices, positions_clip, positions_window, [&](const glm::ivec3& face_indices, const glm::ivec2& position_window, const glm::vec3& barycentric) {
             if (position_window.x < 0 || position_window.x >= SCREEN_WIDTH) return;
             if (position_window.y < 0 || position_window.y >= SCREEN_HEIGHT) return;
@@ -327,15 +344,16 @@ int main() {
             if (position_clip.z <= depth_buffer.at(position_window)) return;
             depth_buffer.at(position_window) = position_clip.z;
 
-            const auto colour = interpolate(colours, face_indices, barycentric);
+            auto texcoord = interpolate(texcoords, face_indices, barycentric);
+            const auto diffuse = sample_texture(diffuse_texture, texcoord);
 
             position_clip_buffer.at(position_window) = position_clip;
-            colour_buffer.at(position_window) = colour;
+            diffuse_buffer.at(position_window) = diffuse;
         });
 
         // Render geometry from buffers
         screen_buffer.for_each_pixel([&](const glm::ivec2& position) {
-            screen_buffer.at(position) = colour_buffer.at(position);
+            screen_buffer.at(position) = diffuse_buffer.at(position);
         });
         window.draw(screen_buffer);
     }

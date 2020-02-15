@@ -2,22 +2,9 @@
 #define RENDERER_PROTOTYPE_APPLICATIONWINDOW_HPP
 
 #include <SDL.h>
-#include <exception>
-#include <string>
 #include "Buffer.hpp"
-#include <algorithm>
 
 namespace app {
-
-    class SDLException : public std::exception {
-    public:
-        explicit SDLException(const std::string& message);
-
-        const char* what() const noexcept override;
-
-    private:
-        std::string m_message;
-    };
 
     class ApplicationWindow {
     public:

@@ -94,6 +94,24 @@ namespace buffer {
             return m_items.data();
         }
 
+        /**
+         * @brief Accesses buffer width.
+         *
+         * @return The width in pixels of the buffer.
+         */
+        auto width() const {
+            return m_width;
+        }
+
+        /**
+         * @brief Accesses buffer height.
+         *
+         * @return The height in pixels of the buffer.
+         */
+        auto height() const {
+            return m_height;
+        }
+
     private:
         const size_t m_width;
         const size_t m_height;
