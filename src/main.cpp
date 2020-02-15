@@ -5,18 +5,28 @@
 #include <glm/glm.hpp>
 #include <vector>
 #include <algorithm>
-#include <array>
-#include <memory>
 #include <numeric>
 #include "Buffer.hpp"
+#include "ApplicationWindow.hpp"
+#include <glm/gtc/type_ptr.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 
 
 using buffer::Buffer;
+using app::ApplicationWindow;
+
+
+void apply_matrix(const std::vector<glm::vec3>& vertices, const glm::mat4& matrix, std::vector<glm::vec4>& result) {
+    result.resize(vertices.size());
+    std::transform(vertices.cbegin(), vertices.cend(), result.begin(), [&matrix](const auto& vertex) {
+        return matrix * glm::vec4(vertex, 1.f);
+    });
+}
 void apply_matrix(const std::vector<glm::vec3>& vertices, const glm::mat4& matrix, std::vector<glm::vec3>& result) {
-    result.clear();
-    for (const auto& vertex : vertices) {
-        result.emplace_back(matrix * glm::vec4(vertex, 1.f));
-    }
+    result.resize(vertices.size());
+    std::transform(vertices.cbegin(), vertices.cend(), result.begin(), [&matrix](const auto& vertex) {
+        return glm::vec3(matrix * glm::vec4(vertex, 1.f));
+    });
 }
 void apply_matrix(const std::vector<glm::vec2>& vertices, const glm::mat3& matrix, std::vector<glm::vec2>& result) {
     result.resize(vertices.size());
@@ -168,12 +178,29 @@ inline T interpolate(const std::vector<T>& vertices, const glm::ivec3& face_indi
 }
 
 
+template<size_t Size>
+glm::mat<Size, Size, float> make_matrix(std::initializer_list<std::initializer_list<float>> args) {
+    float data[Size*Size];
+    auto index = 0;
+    assert(args.size() == Size);
+    for (auto row : args) {
+        assert(row.size() == Size);
+        for (auto element : row) {
+            data[index++] = element;
+        }
+    }
+    glm::mat<Size, Size, float> matrix;
+    std::memcpy(glm::value_ptr(matrix), data, sizeof(data));
+    return glm::transpose(matrix);
+}
+
+
 int main() {
     // Define geometry
-    const std::vector<glm::vec4> positions_clip = {
-            {1.f, 0.f, 0.f, 1.f},
-            {0.f, -1.f, 0.f, 1.f},
-            {-1.f, 0.f, 0.f, 1.f}
+    const std::vector<glm::vec3> positions_world = {
+            {1.f, 0.f, 1.f},
+            {1.f, 0.f, -1.f},
+            {1.f, 1.f, 0.f}
     };
     const std::vector<glm::vec3> colours = {
             {1.f, 0.f, 0.f},
@@ -185,16 +212,38 @@ int main() {
     // Define buffers
     const size_t SCREEN_WIDTH = 640;
     const size_t SCREEN_HEIGHT = 480;
+    Buffer<glm::vec3> screen_buffer(SCREEN_WIDTH, SCREEN_HEIGHT);
     Buffer<float> depth_buffer(SCREEN_WIDTH, SCREEN_HEIGHT, std::numeric_limits<float>::lowest());
     Buffer<glm::vec4> position_clip_buffer(SCREEN_WIDTH, SCREEN_HEIGHT);
     Buffer<glm::vec3> colour_buffer(SCREEN_WIDTH, SCREEN_HEIGHT);
 
-    const auto window_transform = glm::mat3(1.f);
+    const auto window_transform = make_matrix<3>({
+        {SCREEN_WIDTH/2.f, 0.f, SCREEN_WIDTH/2.f},
+        {0.f, SCREEN_HEIGHT/2.f, SCREEN_HEIGHT/2.f},
+        {0.f, 0.f, 1.f}
+    });
+    const auto camera_pose_transform = make_matrix<4>({
+        {0.f,  0.f, 1.f, 0.f},
+        {0.f,  1.f, 0.f, 0.f},
+        {-1.f, 0.f, 0.f, 0.f},
+        {0.f,  0.f, 0.f, 1.f}
+    });
+    const auto perspective_transform = make_matrix<4>({
+        {1.f, 0.f, 0.f, 0.f},
+        {0.f, 1.f, 0.f, 0.f},
+        {0.f, 0.f, 1.f, 0.f},
+        {0.f, 0.f, -1.f, 0.f}
+    });
+    // const auto perspective_transform = glm::perspective(glm::pi<float>()/2, (float)SCREEN_HEIGHT/SCREEN_WIDTH, 0.1f, 100.f);
 
     // Transform vertices to window coordinates
+    std::vector<glm::vec3> positions_view;
+    std::vector<glm::vec4> positions_clip;
     std::vector<glm::vec2> positions_ndc;
     std::vector<glm::vec2> positions_window;
-    perspective_transform(positions_clip, positions_ndc);
+    apply_matrix(positions_world, camera_pose_transform, positions_view);
+    apply_matrix(positions_view, perspective_transform, positions_clip);
+    perspective_divide(positions_clip, positions_ndc);
     apply_matrix(positions_ndc, window_transform, positions_window);
 
     // Update position + colour buffers from geometry
@@ -211,6 +260,17 @@ int main() {
         position_clip_buffer.at(position_window) = position_clip;
         colour_buffer.at(position_window) = colour;
     });
+
+    // Render geometry from buffers
+    screen_buffer.for_each_pixel([&](const glm::ivec2& position) {
+        screen_buffer.at(position) = colour_buffer.at(position);
+    });
+
+    // Draw the result to the screen
+    ApplicationWindow window(SCREEN_WIDTH, SCREEN_HEIGHT);
+    while (window.poll_events()) {
+        window.draw(screen_buffer);
+    }
 
     std::cout << "Hello, World!" << std::endl;
     return 0;
