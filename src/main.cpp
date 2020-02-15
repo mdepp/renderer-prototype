@@ -234,8 +234,7 @@ int main() {
         {0.f, 0.f, 1.f, 0.f},
         {0.f, 0.f, -1.f, 0.f}
     });
-    // const auto perspective_transform = glm::perspective(glm::pi<float>()/2, (float)SCREEN_HEIGHT/SCREEN_WIDTH, 0.1f, 100.f);
-
+    
     // Transform vertices to window coordinates
     std::vector<glm::vec3> positions_view;
     std::vector<glm::vec4> positions_clip;
