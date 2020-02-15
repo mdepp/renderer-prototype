@@ -311,12 +311,11 @@ int main() {
     // Create a window and render things
     ApplicationWindow window(SCREEN_WIDTH, SCREEN_HEIGHT);
 
-    auto theta = 0.f;
-    auto start_time = std::chrono::system_clock::now();
+    const auto start_time = std::chrono::system_clock::now();
     while (window.poll_events()) {
         // Update model transform
-        auto elapsed_seconds = std::chrono::duration<float>(std::chrono::system_clock::now() - start_time).count();
-        theta = elapsed_seconds / ROTATION_PERIOD * TAU;
+        const auto elapsed_seconds = std::chrono::duration<float>(std::chrono::system_clock::now() - start_time).count();
+        const auto theta = elapsed_seconds / ROTATION_PERIOD * TAU;
         model_transform = make_matrix<4>({
             {std::cos(theta), 0.f, std::sin(theta),  2.f},
             {0.f,             1.f, 0.f,              0.f},
@@ -344,7 +343,7 @@ int main() {
             if (position_clip.z <= depth_buffer.at(position_window)) return;
             depth_buffer.at(position_window) = position_clip.z;
 
-            auto texcoord = interpolate(texcoords, face_indices, barycentric);
+            const auto texcoord = interpolate(texcoords, face_indices, barycentric);
             const auto diffuse = sample_texture(diffuse_texture, texcoord);
 
             position_clip_buffer.at(position_window) = position_clip;
