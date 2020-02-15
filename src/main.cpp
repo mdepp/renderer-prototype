@@ -120,7 +120,7 @@ void for_each_pixel(const Face<glm::vec2>& face_window, const Face<glm::vec4>& f
  * @param positions_clip Homogeneous coordinates in clip space
  * @param positions_ndc Coordinates in NDC space
  */
-void perspective_transform(const std::vector<glm::vec4>& positions_clip, std::vector<glm::vec2> positions_ndc) {
+void perspective_divide(const std::vector<glm::vec4>& positions_clip, std::vector<glm::vec2>& positions_ndc) {
     positions_ndc.resize(positions_clip.size());
     std::transform(positions_clip.cbegin(), positions_clip.cend(), positions_ndc.begin(), [](const glm::vec4& position_clip) {
         return glm::vec2(position_clip / position_clip.w);
@@ -178,7 +178,7 @@ int main() {
     const std::vector<glm::vec3> colours = {
             {1.f, 0.f, 0.f},
             {0.f, 1.f, 0.0},
-            {0.f, 0.f, 0.f}
+            {0.f, 0.f, 1.f}
     };
     const std::vector<size_t> indices = {0, 1, 2};
 
