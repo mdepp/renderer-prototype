@@ -178,6 +178,23 @@ inline T interpolate(const std::vector<T>& vertices, const glm::ivec3& face_indi
 }
 
 
+/**
+ * @brief Creates a square matrix from a list of rows.
+ *
+ * To see why the input is a list of rows, consider this example:
+ * <pre>@code
+ *     make_matrix<2>({
+ *       {1, 2},
+ *       {3, 4}
+ *     });
+ * @endcode</pre>
+ * This will make the matrix with columns (1,3) and (2,4), just as it appears visually.
+ *
+ * @tparam Size Size of the matrix to square matrix to create. If the size of the initializer lists does not match,
+ *     an assertion is thrown.
+ * @param args An initializer_list of rows, each row an initializer_list of elements of the matrix.
+ * @return A matrix with the specified elements.
+ */
 template<size_t Size>
 glm::mat<Size, Size, float> make_matrix(std::initializer_list<std::initializer_list<float>> args) {
     float data[Size*Size];
