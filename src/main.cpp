@@ -217,6 +217,7 @@ int main() {
     Buffer<glm::vec4> position_clip_buffer(SCREEN_WIDTH, SCREEN_HEIGHT);
     Buffer<glm::vec3> colour_buffer(SCREEN_WIDTH, SCREEN_HEIGHT);
 
+    // Define transforms
     const auto window_transform = make_matrix<3>({
         {SCREEN_WIDTH/2.f, 0.f, SCREEN_WIDTH/2.f},
         {0.f, SCREEN_HEIGHT/2.f, SCREEN_HEIGHT/2.f},
@@ -234,43 +235,43 @@ int main() {
         {0.f, 0.f, 1.f, 0.f},
         {0.f, 0.f, -1.f, 0.f}
     });
-    
-    // Transform vertices to window coordinates
+
+    // Results of transforms
     std::vector<glm::vec3> positions_view;
     std::vector<glm::vec4> positions_clip;
     std::vector<glm::vec2> positions_ndc;
     std::vector<glm::vec2> positions_window;
-    apply_matrix(positions_world, camera_pose_transform, positions_view);
-    apply_matrix(positions_view, perspective_transform, positions_clip);
-    perspective_divide(positions_clip, positions_ndc);
-    apply_matrix(positions_ndc, window_transform, positions_window);
 
-    // Update position + colour buffers from geometry
-    fragment_shader_pass(indices, positions_clip, positions_window, [&](const glm::ivec3& face_indices, const glm::ivec2& position_window, const glm::vec3& barycentric) {
-        if (position_window.x < 0 || position_window.x >= SCREEN_WIDTH) return;
-        if (position_window.y < 0 || position_window.y >= SCREEN_HEIGHT) return;
-
-        const auto position_clip = interpolate(positions_clip, face_indices, barycentric);
-        if (position_clip.z <= depth_buffer.at(position_window)) return;
-        depth_buffer.at(position_window) = position_clip.z;
-
-        const auto colour = interpolate(colours, face_indices, barycentric);
-
-        position_clip_buffer.at(position_window) = position_clip;
-        colour_buffer.at(position_window) = colour;
-    });
-
-    // Render geometry from buffers
-    screen_buffer.for_each_pixel([&](const glm::ivec2& position) {
-        screen_buffer.at(position) = colour_buffer.at(position);
-    });
-
-    // Draw the result to the screen
+    // Create a window and render things
     ApplicationWindow window(SCREEN_WIDTH, SCREEN_HEIGHT);
     while (window.poll_events()) {
+        // Transform vertices to window coordinates
+        apply_matrix(positions_world, camera_pose_transform, positions_view);
+        apply_matrix(positions_view, perspective_transform, positions_clip);
+        perspective_divide(positions_clip, positions_ndc);
+        apply_matrix(positions_ndc, window_transform, positions_window);
+
+        // Update position + colour buffers from geometry
+        fragment_shader_pass(indices, positions_clip, positions_window, [&](const glm::ivec3& face_indices, const glm::ivec2& position_window, const glm::vec3& barycentric) {
+            if (position_window.x < 0 || position_window.x >= SCREEN_WIDTH) return;
+            if (position_window.y < 0 || position_window.y >= SCREEN_HEIGHT) return;
+
+            const auto position_clip = interpolate(positions_clip, face_indices, barycentric);
+            if (position_clip.z <= depth_buffer.at(position_window)) return;
+            depth_buffer.at(position_window) = position_clip.z;
+
+            const auto colour = interpolate(colours, face_indices, barycentric);
+
+            position_clip_buffer.at(position_window) = position_clip;
+            colour_buffer.at(position_window) = colour;
+        });
+
+        // Render geometry from buffers
+        screen_buffer.for_each_pixel([&](const glm::ivec2& position) {
+            screen_buffer.at(position) = colour_buffer.at(position);
+        });
         window.draw(screen_buffer);
     }
 
-    std::cout << "Hello, World!" << std::endl;
     return 0;
 }
