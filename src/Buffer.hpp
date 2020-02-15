@@ -25,6 +25,8 @@ namespace buffer {
          */
         explicit Buffer(const size_t width, const size_t height, const T clear_value = T())
                 : m_width(width), m_height(height), m_clear_value(clear_value) {
+            assert(m_width > 0);
+            assert(m_height > 0);
             m_items.resize(width * height);
             clear();
         }
@@ -65,6 +67,14 @@ namespace buffer {
             std::fill(m_items.begin(), m_items.end(), m_clear_value);
         }
 
+        /**
+         * @brief Executes a function once per pixel in the buffer.
+         *
+         * @tparam Functor
+         * @param functor Function to execute. Should have a signature something like `void(glm::ivec2 position)`,
+         *     where `position` is the coordinates of some pixel. This function is called once for every pixel in the
+         *     buffer.
+         */
         template<typename Functor>
         void for_each_pixel(Functor &&functor) const {
             glm::ivec2 position;
@@ -75,6 +85,11 @@ namespace buffer {
             }
         }
 
+        /**
+         * @brief Accesses raw buffer data.
+         *
+         * @return The underlying data of the buffer. Elements are stored contiguously in row-major order.
+         */
         const T* data() const {
             return m_items.data();
         }
