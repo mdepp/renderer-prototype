@@ -10,6 +10,8 @@
 #include "ApplicationWindow.hpp"
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <cmath>
+#include <chrono>
 
 
 using buffer::Buffer;
@@ -211,24 +213,57 @@ glm::mat<Size, Size, float> make_matrix(std::initializer_list<std::initializer_l
     return glm::transpose(matrix);
 }
 
+/**
+ * Makes the perspective transform which maps view space to clip space.
+ *
+ * @param fovy Vertical FOV
+ * @param aspect_ratio Ratio of screen width to height
+ * @param near_depth Distance to near plane (positive)
+ * @param far_depth Distance to far plane (positive)
+ * @return Perspective transform from view space to clip space
+ */
+glm::mat4 make_perspective_transform(float fovy, float aspect_ratio, float near_depth, float far_depth) {
+    auto perspective = glm::perspective(fovy, aspect_ratio, near_depth, far_depth);
+    return make_matrix<4>({
+        {-1, 0, 0, 0},
+        {0, 1, 0, 0},
+        {0, 0, -1, 0},
+        {0, 0, 0, 1}
+    }) * perspective;
+}
+
 
 int main() {
+    // Configuration
+    const size_t SCREEN_WIDTH = 640;
+    const size_t SCREEN_HEIGHT = 480;
+    const float ROTATION_PERIOD = 2.f;
+    const float TAU = 6.283185307179586476925286766559005768394338798750211641949f;
+    const float FOV = TAU/4.f;
+    const float NEAR_PLANE = 0.1f;
+    const float FAR_PLANE = 10.f;
+
     // Define geometry
-    const std::vector<glm::vec3> positions_world = {
-            {1.f, 0.f, 1.f},
-            {1.f, 0.f, -1.f},
-            {1.f, 1.f, 0.f}
+    const std::vector<glm::vec3> positions_model = {
+            {0.f, -0.5f, 0.577f},
+            {0.f, -0.5f, -0.577f},
+            {0.f, 0.5f, 0.f},
+            {0.2f, -0.5f, 0.577f},
+            {0.2f, -0.5f, -0.577f},
+            {0.2f, 0.5f, 0.f},
+
     };
     const std::vector<glm::vec3> colours = {
             {1.f, 0.f, 0.f},
             {0.f, 1.f, 0.0},
-            {0.f, 0.f, 1.f}
+            {0.f, 0.f, 1.f},
+            {1.f, 0.f, 0.f},
+            {1.f, 0.f, 0.f},
+            {1.f, 0.f, 0.f},
     };
-    const std::vector<size_t> indices = {0, 1, 2};
+    const std::vector<size_t> indices = {0, 1, 2, 3, 4, 5};
 
     // Define buffers
-    const size_t SCREEN_WIDTH = 640;
-    const size_t SCREEN_HEIGHT = 480;
     Buffer<glm::vec3> screen_buffer(SCREEN_WIDTH, SCREEN_HEIGHT);
     Buffer<float> depth_buffer(SCREEN_WIDTH, SCREEN_HEIGHT, std::numeric_limits<float>::lowest());
     Buffer<glm::vec4> position_clip_buffer(SCREEN_WIDTH, SCREEN_HEIGHT);
@@ -246,14 +281,11 @@ int main() {
         {-1.f, 0.f, 0.f, 0.f},
         {0.f,  0.f, 0.f, 1.f}
     });
-    const auto perspective_transform = make_matrix<4>({
-        {1.f, 0.f, 0.f, 0.f},
-        {0.f, 1.f, 0.f, 0.f},
-        {0.f, 0.f, 1.f, 0.f},
-        {0.f, 0.f, -1.f, 0.f}
-    });
+    const auto perspective_transform = make_perspective_transform(FOV, (float)SCREEN_WIDTH/SCREEN_HEIGHT, NEAR_PLANE, FAR_PLANE);
+    auto model_transform = glm::mat4(1.f);
 
     // Results of transforms
+    std::vector<glm::vec3> positions_world;
     std::vector<glm::vec3> positions_view;
     std::vector<glm::vec4> positions_clip;
     std::vector<glm::vec2> positions_ndc;
@@ -261,19 +293,37 @@ int main() {
 
     // Create a window and render things
     ApplicationWindow window(SCREEN_WIDTH, SCREEN_HEIGHT);
+
+    auto theta = 0.f;
+    auto start_time = std::chrono::system_clock::now();
     while (window.poll_events()) {
+        // Update model transform
+        auto elapsed_seconds = std::chrono::duration<float>(std::chrono::system_clock::now() - start_time).count();
+        theta = elapsed_seconds / ROTATION_PERIOD * TAU;
+        model_transform = make_matrix<4>({
+            {std::cos(theta), 0.f, std::sin(theta),  2.f},
+            {0.f,             1.f, 0.f,              0.f},
+            {std::sin(theta), 0.f, -std::cos(theta), 0.f},
+            {0.f,             0.f, 0.f,              1.f}
+        });
+
         // Transform vertices to window coordinates
+        apply_matrix(positions_model, model_transform, positions_world);
         apply_matrix(positions_world, camera_pose_transform, positions_view);
         apply_matrix(positions_view, perspective_transform, positions_clip);
         perspective_divide(positions_clip, positions_ndc);
         apply_matrix(positions_ndc, window_transform, positions_window);
 
         // Update position + colour buffers from geometry
+        depth_buffer.clear();
+        position_clip_buffer.clear();
+        colour_buffer.clear();
         fragment_shader_pass(indices, positions_clip, positions_window, [&](const glm::ivec3& face_indices, const glm::ivec2& position_window, const glm::vec3& barycentric) {
             if (position_window.x < 0 || position_window.x >= SCREEN_WIDTH) return;
             if (position_window.y < 0 || position_window.y >= SCREEN_HEIGHT) return;
 
             const auto position_clip = interpolate(positions_clip, face_indices, barycentric);
+            if (position_clip.z >= 0) return;
             if (position_clip.z <= depth_buffer.at(position_window)) return;
             depth_buffer.at(position_window) = position_clip.z;
 
