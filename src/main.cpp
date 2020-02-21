@@ -32,6 +32,12 @@ void apply_matrix(const std::vector<glm::vec3>& vertices, const glm::mat4& matri
         return glm::vec3(matrix * glm::vec4(vertex, 1.f));
     });
 }
+void apply_matrix_linear(const std::vector<glm::vec3>& vertices, const glm::mat4& matrix, std::vector<glm::vec3>& result) {
+    result.resize(vertices.size());
+    std::transform(vertices.cbegin(), vertices.cend(), result.begin(), [&matrix](const auto& vertex) {
+        return glm::vec3(matrix * glm::vec4(vertex, 0.f));
+    });
+}
 void apply_matrix(const std::vector<glm::vec2>& vertices, const glm::mat3& matrix, std::vector<glm::vec2>& result) {
     result.resize(vertices.size());
     std::transform(vertices.cbegin(), vertices.cend(), result.begin(), [&matrix](const auto& vertex) {
@@ -249,6 +255,56 @@ inline T sample_texture(const Buffer<T>& buffer, const glm::vec2& texcoord) {
     return buffer.at({x, y});
 }
 
+/**
+ * @brief Calculates Phong reflection model for a point and a single light.
+ *
+ * See https://en.wikipedia.org/wiki/Phong_reflection_model
+ *
+ * While the parameter descriptions refer to world frame, the coordinate frame of the parameters doesn't matter so long
+ * as it is consistent and there is only rotation/translation between the world frame and the frame used.
+ *
+ * @param camera_position Position of the camera in world frame
+ * @param point_position Position of the point in world frame
+ * @param point_normal Surface normal of the point in world frame
+ * @param point_ambient Ambient colour of the point
+ * @param point_diffuse Diffuse colour of the point
+ * @param point_specular Specular colour of the point
+ * @param point_shininess Shininess of the point
+ * @param light_position Position of the light
+ * @param light_ambient Ambient colour of the light (if using multiple lights, only a single light should have an
+ *     ambient component)
+ * @param light_diffuse Diffuse colour of the light
+ * @param light_specular Specular colour of the light
+ * @return The colour of the point as lit by the light. The effects of multiple lights are linear.
+ */
+glm::vec3 phong_reflection(const glm::vec3& camera_position,
+                           const glm::vec3& point_position,
+                           const glm::vec3& point_normal,
+                           const glm::vec3& point_ambient,
+                           const glm::vec3& point_diffuse,
+                           const glm::vec3& point_specular,
+                           const float point_shininess,
+                           const glm::vec3& light_position,
+                           const glm::vec3& light_ambient,
+                           const glm::vec3& light_diffuse,
+                           const glm::vec3& light_specular) {
+    const auto L = glm::normalize(light_position - camera_position);
+    const auto R = glm::normalize(2*glm::dot(L, point_normal) * point_normal - L);
+    const auto V = glm::normalize(camera_position - point_position);
+
+    const auto LN = glm::dot(L, point_normal);
+    const auto RV = glm::dot(R, V);
+
+    auto result = light_ambient * point_ambient;
+    if (LN > 0) {
+        result += light_diffuse * point_diffuse * LN;
+        if (RV > 0) {
+            result += light_specular * point_specular * glm::pow(RV, point_shininess);
+        }
+    }
+    return glm::min(result, glm::vec3(1.f));
+}
+
 int main() {
     // Configuration
     const size_t SCREEN_WIDTH = 640;
@@ -279,12 +335,24 @@ int main() {
             {0.f, 1.f},
             {0.f, 0.f},
     };
+    std::vector<glm::vec3> normals_model = {
+            {-3.f, -1.f, -1.f},
+            {-3.f, -1.f, 1.f},
+            {-3.f, 1.f, 1.f},
+            {3.f, 1.f, 1.f},
+            {3.f, 1.f, -1.f},
+            {3.f, -1.f, -1.f}
+    };
+    std::transform(normals_model.begin(), normals_model.end(), normals_model.begin(), [](const auto& normal) {
+        return glm::normalize(normal);
+    });
 
     // Define buffers
     Buffer<glm::vec3> screen_buffer(SCREEN_WIDTH, SCREEN_HEIGHT);
     Buffer<float> depth_buffer(SCREEN_WIDTH, SCREEN_HEIGHT, std::numeric_limits<float>::lowest());
-    Buffer<glm::vec4> position_clip_buffer(SCREEN_WIDTH, SCREEN_HEIGHT);
+    Buffer<glm::vec3> positions_world_buffer(SCREEN_WIDTH, SCREEN_HEIGHT);
     Buffer<glm::vec3> diffuse_buffer(SCREEN_WIDTH, SCREEN_HEIGHT);
+    Buffer<glm::vec3> normals_world_buffer(SCREEN_WIDTH, SCREEN_HEIGHT);
 
     // Define transforms
     const auto window_transform = make_matrix<3>({
@@ -303,6 +371,7 @@ int main() {
 
     // Results of transforms
     std::vector<glm::vec3> positions_world;
+    std::vector<glm::vec3> normals_world;
     std::vector<glm::vec3> positions_view;
     std::vector<glm::vec4> positions_clip;
     std::vector<glm::vec2> positions_ndc;
@@ -312,6 +381,7 @@ int main() {
     ApplicationWindow window(SCREEN_WIDTH, SCREEN_HEIGHT);
 
     const auto start_time = std::chrono::system_clock::now();
+    auto i = 0;
     while (window.poll_events()) {
         // Update model transform
         const auto elapsed_seconds = std::chrono::duration<float>(std::chrono::system_clock::now() - start_time).count();
@@ -325,6 +395,7 @@ int main() {
 
         // Transform vertices to window coordinates
         apply_matrix(positions_model, model_transform, positions_world);
+        apply_matrix_linear(normals_model, model_transform, normals_world);
         apply_matrix(positions_world, camera_pose_transform, positions_view);
         apply_matrix(positions_view, perspective_transform, positions_clip);
         perspective_divide(positions_clip, positions_ndc);
@@ -332,7 +403,7 @@ int main() {
 
         // Update position + colour buffers from geometry
         depth_buffer.clear();
-        position_clip_buffer.clear();
+        positions_world_buffer.clear();
         diffuse_buffer.clear();
         fragment_shader_pass(indices, positions_clip, positions_window, [&](const glm::ivec3& face_indices, const glm::ivec2& position_window, const glm::vec3& barycentric) {
             if (position_window.x < 0 || position_window.x >= SCREEN_WIDTH) return;
@@ -343,16 +414,30 @@ int main() {
             if (position_clip.z <= depth_buffer.at(position_window)) return;
             depth_buffer.at(position_window) = position_clip.z;
 
+            const auto position_world = interpolate(positions_world, face_indices, barycentric);
+            const auto normal_world = glm::normalize(interpolate(normals_world, face_indices, barycentric));
+
             const auto texcoord = interpolate(texcoords, face_indices, barycentric);
             const auto diffuse = sample_texture(diffuse_texture, texcoord);
 
-            position_clip_buffer.at(position_window) = position_clip;
+            positions_world_buffer.at(position_window) = position_world;
+            normals_world_buffer.at(position_window) = normal_world;
             diffuse_buffer.at(position_window) = diffuse;
         });
 
         // Render geometry from buffers
         screen_buffer.for_each_pixel([&](const glm::ivec2& position) {
-            screen_buffer.at(position) = diffuse_buffer.at(position);
+            screen_buffer.at(position) = phong_reflection({0.f, 0.f, 0.f},
+                                         positions_world_buffer.at(position),
+                                         normals_world_buffer.at(position),
+                                         diffuse_buffer.at(position),
+                                         diffuse_buffer.at(position),
+                                         diffuse_buffer.at(position),
+                                         1.f,
+                                         {-1.f, 0.f, 0.f},
+                                         {0.5f, 0.5f, 0.5f},
+                                         {0.5f, 0.5f, 0.5f},
+                                         {1.f, 1.f, 1.f});
         });
         window.draw(screen_buffer);
     }
