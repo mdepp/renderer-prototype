@@ -382,7 +382,6 @@ int main() {
     ApplicationWindow window(SCREEN_WIDTH, SCREEN_HEIGHT);
 
     const auto start_time = std::chrono::system_clock::now();
-    auto i = 0;
     while (window.poll_events()) {
         // Update model transform
         const auto elapsed_seconds = std::chrono::duration<float>(std::chrono::system_clock::now() - start_time).count();
