@@ -113,8 +113,8 @@ namespace buffer {
         }
 
     private:
-        const size_t m_width;
-        const size_t m_height;
+        const int m_width;
+        const int m_height;
         const T m_clear_value;
         std::vector <T> m_items;
     };

@@ -15,7 +15,6 @@ app::ApplicationWindow::ApplicationWindow(const size_t width, const size_t heigh
 }
 
 void app::ApplicationWindow::draw(const buffer::Buffer<glm::vec3> &texture) {
-    SDL_PixelFormat pixel_format;
     texture.for_each_pixel([&](const glm::ivec2& position) {
         const auto colour = texture.at(position);
         const uint32_t r = colour.r * 255;

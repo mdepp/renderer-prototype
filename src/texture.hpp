@@ -31,8 +31,8 @@ namespace texture {
 
         buffer::Buffer<glm::vec3> buffer(converted_surface->w, converted_surface->h);
         auto pixels = static_cast<uint32_t *>(converted_surface->pixels);
-        for (size_t y=0; y<converted_surface->h; ++y) {
-            for(size_t x=0; x<converted_surface->w; ++x) {
+        for (int y=0; y<converted_surface->h; ++y) {
+            for(int x=0; x<converted_surface->w; ++x) {
                 auto pixel = pixels[x+(converted_surface->h-1-y)*converted_surface->w];
                 auto r = (pixel >> (2*BITS_PER_CHANNEL)) & CHANNEL_MASK;
                 auto g = (pixel >> BITS_PER_CHANNEL) & CHANNEL_MASK;

@@ -307,8 +307,8 @@ glm::vec3 phong_reflection(const glm::vec3& camera_position,
 
 int main() {
     // Configuration
-    const size_t SCREEN_WIDTH = 640;
-    const size_t SCREEN_HEIGHT = 480;
+    const int SCREEN_WIDTH = 640;
+    const int SCREEN_HEIGHT = 480;
     const float ROTATION_PERIOD = 2.f;
     const float TAU = 6.283185307179586476925286766559005768394338798750211641949f;
     const float FOV = TAU/4.f;
