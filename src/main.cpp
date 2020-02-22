@@ -233,7 +233,7 @@ glm::mat<Size, Size, float> make_matrix(std::initializer_list<std::initializer_l
 glm::mat4 make_perspective_transform(float fovy, float aspect_ratio, float near_depth, float far_depth) {
     auto perspective = glm::perspective(fovy, aspect_ratio, near_depth, far_depth);
     return make_matrix<4>({
-        {-1, 0, 0, 0},
+        {1, 0, 0, 0},
         {0, 1, 0, 0},
         {0, 0, -1, 0},
         {0, 0, 0, 1}
@@ -317,15 +317,14 @@ int main() {
 
     // Define geometry
     const std::vector<glm::vec3> positions_model = {
-            {0.f, -1.f, -1.f},
-            {0.f, -1.f, 1.f},
-            {0.f, 1.f, 1.f},
-            {0.2f, 1.f, 1.f},
-            {0.2f, 1.f, -1.f},
-            {0.2f, -1.f, -1.f},
-
+            {-1.f, -1.f, 0.1f},
+            {1.f, -1.f, 0.1f},
+            {1.f, 1.f, 0.1f},
+            {1.f, 1.f, -0.1f},
+            {-1.f, 1.f, -0.1f},
+            {-1.f, -1.f, -0.1f}
     };
-    const std::vector<size_t> indices = {0, 1, 2, 4, 5, 6};
+    const std::vector<size_t> indices = {0, 1, 2, 3, 4, 5};
     auto diffuse_texture = load_texture("../src/image/falcon-heavy.jpg");
     const std::vector<glm::vec2> texcoords = {
             {0.f, 0.f},
@@ -333,16 +332,18 @@ int main() {
             {1.f, 1.f},
             {1.f, 1.f},
             {0.f, 1.f},
-            {0.f, 0.f},
+            {0.f, 0.f}
     };
     std::vector<glm::vec3> normals_model = {
-            {-3.f, -1.f, -1.f},
-            {-3.f, -1.f, 1.f},
-            {-3.f, 1.f, 1.f},
-            {3.f, 1.f, 1.f},
-            {3.f, 1.f, -1.f},
-            {3.f, -1.f, -1.f}
+            {-1.f, -1.f, 3.f},
+            {1.f, -1.f, 3.f},
+            {1.f, 1.f, 3.f},
+            {1.f, 1.f, -3.f},
+            {-1.f, 1.f, -3.f},
+            {-1.f, -1.f, -3.f}
     };
+
+
     std::transform(normals_model.begin(), normals_model.end(), normals_model.begin(), [](const auto& normal) {
         return glm::normalize(normal);
     });
@@ -361,9 +362,9 @@ int main() {
         {0.f, 0.f, 1.f}
     });
     const auto camera_pose_transform = make_matrix<4>({
-        {0.f,  0.f, 1.f, 0.f},
+        {1.f,  0.f, 0.f, 0.f},
         {0.f,  1.f, 0.f, 0.f},
-        {-1.f, 0.f, 0.f, 0.f},
+        {0.f,  0.f, 1.f, 0.f},
         {0.f,  0.f, 0.f, 1.f}
     });
     const auto perspective_transform = make_perspective_transform(FOV, (float)SCREEN_WIDTH/SCREEN_HEIGHT, NEAR_PLANE, FAR_PLANE);
@@ -387,9 +388,9 @@ int main() {
         const auto elapsed_seconds = std::chrono::duration<float>(std::chrono::system_clock::now() - start_time).count();
         const auto theta = elapsed_seconds / ROTATION_PERIOD * TAU;
         model_transform = make_matrix<4>({
-            {std::cos(theta), 0.f, std::sin(theta),  2.f},
+            {std::cos(theta), 0.f, -std::sin(theta),  0.f},
             {0.f,             1.f, 0.f,              0.f},
-            {std::sin(theta), 0.f, -std::cos(theta), 0.f},
+            {std::sin(theta), 0.f, std::cos(theta), -2.f},
             {0.f,             0.f, 0.f,              1.f}
         });
 
