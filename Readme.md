@@ -1,6 +1,6 @@
 # About
 
-A couple of years ago, I made a [software 3D renderer](https://github.com/mdepp/software-renderer) in C++.
+A couple of years ago, I made a [software 3D renderer](https://github.com/mdepp/3d-rendering) in C++.
 While I was largely happy with the result, the code structure was poor and made adding interesting features like textures and shadows nearly impossible.
 Moreover, its structure was quite different from existing software (e.g. OpenGL or DirectX) which effectively ruled out experimentation with techniques developed for those technologies.
 
