@@ -18,7 +18,6 @@
 
 using buffer::Buffer;
 using app::ApplicationWindow;
-using texture::load_texture;
 using model::load_meshes;
 using namespace std::filesystem;
 
