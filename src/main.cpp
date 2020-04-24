@@ -6,19 +6,21 @@
 #include <vector>
 #include <algorithm>
 #include <numeric>
+#include <filesystem>
 #include "Buffer.hpp"
 #include "ApplicationWindow.hpp"
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <cmath>
 #include <chrono>
-#include "texture.hpp"
+#include "Model.hpp"
 
 
 using buffer::Buffer;
 using app::ApplicationWindow;
 using texture::load_texture;
-
+using model::load_meshes;
+using namespace std::filesystem;
 
 void apply_matrix(const std::vector<glm::vec3>& vertices, const glm::mat4& matrix, std::vector<glm::vec4>& result) {
     result.resize(vertices.size());
@@ -162,11 +164,15 @@ template<typename Functor>
 void fragment_shader_pass(const std::vector<size_t>& indices, const std::vector<glm::vec4>& positions_clip, const std::vector<glm::vec2>& positions_window, Functor&& functor) {
     assert(indices.size()%3 == 0);
     assert(positions_window.size() == positions_clip.size());
+
     for (size_t i=0; i<indices.size(); i += 3) {
-        const auto face_window = Face(positions_window[i], positions_window[i + 1], positions_window[i + 2]);
-        const auto face_clip = Face(positions_clip[i], positions_clip[i + 1], positions_clip[i + 2]);
+        const auto i1 = indices[i];
+        const auto i2 = indices[i+1];
+        const auto i3 = indices[i+2];
+        const auto face_window = Face(positions_window[i1], positions_window[i2], positions_window[i3]);
+        const auto face_clip = Face(positions_clip[i1], positions_clip[i2], positions_clip[i3]);
         for_each_pixel(face_window, face_clip, [&](const glm::ivec2& position_window, const glm::vec3& barycentric) {
-            functor(glm::ivec3(i, i+1, i+2), position_window, barycentric);
+            functor(glm::ivec3(i1, i2, i3), position_window, barycentric);
         });
     }
 }
@@ -309,44 +315,16 @@ int main() {
     // Configuration
     const int SCREEN_WIDTH = 640;
     const int SCREEN_HEIGHT = 480;
-    const float ROTATION_PERIOD = 2.f;
+    const float ROTATION_PERIOD = 5.f;
     const float TAU = 6.283185307179586476925286766559005768394338798750211641949f;
     const float FOV = TAU/4.f;
     const float NEAR_PLANE = 0.1f;
     const float FAR_PLANE = 10.f;
 
     // Define geometry
-    const std::vector<glm::vec3> positions_model = {
-            {-1.f, -1.f, 0.1f},
-            {1.f, -1.f, 0.1f},
-            {1.f, 1.f, 0.1f},
-            {1.f, 1.f, -0.1f},
-            {-1.f, 1.f, -0.1f},
-            {-1.f, -1.f, -0.1f}
-    };
-    const std::vector<size_t> indices = {0, 1, 2, 3, 4, 5};
-    auto diffuse_texture = load_texture("../src/image/falcon-heavy.jpg");
-    const std::vector<glm::vec2> texcoords = {
-            {0.f, 0.f},
-            {1.f, 0.f},
-            {1.f, 1.f},
-            {1.f, 1.f},
-            {0.f, 1.f},
-            {0.f, 0.f}
-    };
-    std::vector<glm::vec3> normals_model = {
-            {-1.f, -1.f, 3.f},
-            {1.f, -1.f, 3.f},
-            {1.f, 1.f, 3.f},
-            {1.f, 1.f, -3.f},
-            {-1.f, 1.f, -3.f},
-            {-1.f, -1.f, -3.f}
-    };
-
-
-    std::transform(normals_model.begin(), normals_model.end(), normals_model.begin(), [](const auto& normal) {
-        return glm::normalize(normal);
-    });
+    const std::string model_name = "DamagedHelmet";
+    const auto model_path = path("../glTF-Sample-Models/2.0") / model_name / path("glTF") / (model_name + ".gltf");
+    const auto meshes = load_meshes(model_path);
 
     // Define buffers
     Buffer<glm::vec3> screen_buffer(SCREEN_WIDTH, SCREEN_HEIGHT);
@@ -393,51 +371,61 @@ int main() {
             {0.f,             0.f, 0.f,              1.f}
         });
 
-        // Transform vertices to window coordinates
-        apply_matrix(positions_model, model_transform, positions_world);
-        apply_matrix_linear(normals_model, model_transform, normals_world);
-        apply_matrix(positions_world, camera_pose_transform, positions_view);
-        apply_matrix(positions_view, perspective_transform, positions_clip);
-        perspective_divide(positions_clip, positions_ndc);
-        apply_matrix(positions_ndc, window_transform, positions_window);
-
-        // Update position + colour buffers from geometry
         depth_buffer.clear();
         positions_world_buffer.clear();
         diffuse_buffer.clear();
-        fragment_shader_pass(indices, positions_clip, positions_window, [&](const glm::ivec3& face_indices, const glm::ivec2& position_window, const glm::vec3& barycentric) {
-            if (position_window.x < 0 || position_window.x >= SCREEN_WIDTH) return;
-            if (position_window.y < 0 || position_window.y >= SCREEN_HEIGHT) return;
+        for (const auto& mesh : meshes) {
+            // Transform vertices to window coordinates
+            apply_matrix(mesh.positions, model_transform, positions_world);
+            apply_matrix_linear(mesh.normals, model_transform, normals_world);
+            apply_matrix(positions_world, camera_pose_transform, positions_view);
+            apply_matrix(positions_view, perspective_transform, positions_clip);
+            perspective_divide(positions_clip, positions_ndc);
+            apply_matrix(positions_ndc, window_transform, positions_window);
 
-            const auto position_clip = interpolate(positions_clip, face_indices, barycentric);
-            if (position_clip.z >= 0) return;
-            if (position_clip.z <= depth_buffer.at(position_window)) return;
-            depth_buffer.at(position_window) = position_clip.z;
+            // Update position + colour buffers from geometry
+            fragment_shader_pass(mesh.indices, positions_clip, positions_window,
+                                 [&](const glm::ivec3 &face_indices, const glm::ivec2 &position_window,
+                                     const glm::vec3 &barycentric) {
 
-            const auto position_world = interpolate(positions_world, face_indices, barycentric);
-            const auto normal_world = glm::normalize(interpolate(normals_world, face_indices, barycentric));
+                                     if (position_window.x < 0 || position_window.x >= SCREEN_WIDTH) return;
+                                     if (position_window.y < 0 || position_window.y >= SCREEN_HEIGHT) return;
 
-            const auto texcoord = interpolate(texcoords, face_indices, barycentric);
-            const auto diffuse = sample_texture(diffuse_texture, texcoord);
+                                     const auto position_clip = interpolate(positions_clip, face_indices, barycentric);
+                                     if (position_clip.z >= 0) return;
+                                     if (position_clip.z <= depth_buffer.at(position_window)) return;
+                                     depth_buffer.at(position_window) = position_clip.z;
 
-            positions_world_buffer.at(position_window) = position_world;
-            normals_world_buffer.at(position_window) = normal_world;
-            diffuse_buffer.at(position_window) = diffuse;
-        });
+                                     const auto position_world = interpolate(positions_world, face_indices, barycentric);
+                                     const auto normal_world = glm::normalize(interpolate(normals_world, face_indices, barycentric));
+                                     const auto texcoord = interpolate(mesh.texcoords, face_indices, barycentric);
 
+                                     glm::vec3 diffuse;
+                                     if (mesh.has_tex_coords && mesh.has_diffuse_texture) {
+                                         diffuse = sample_texture(*mesh.diffuse_texture, texcoord);
+                                     } else {
+                                         diffuse = interpolate(mesh.diffuse_colour, face_indices, barycentric);
+                                     }
+
+                                     positions_world_buffer.at(position_window) = position_world;
+                                     normals_world_buffer.at(position_window) = normal_world;
+                                     diffuse_buffer.at(position_window) = diffuse;
+                                 });
+
+        }
         // Render geometry from buffers
-        screen_buffer.for_each_pixel([&](const glm::ivec2& position) {
+        screen_buffer.for_each_pixel([&](const glm::ivec2 &position) {
             screen_buffer.at(position) = phong_reflection({0.f, 0.f, 0.f},
-                                         positions_world_buffer.at(position),
-                                         normals_world_buffer.at(position),
-                                         diffuse_buffer.at(position),
-                                         diffuse_buffer.at(position),
-                                         diffuse_buffer.at(position),
-                                         1.f,
-                                         {-1.f, 0.f, 0.f},
-                                         {0.5f, 0.5f, 0.5f},
-                                         {0.5f, 0.5f, 0.5f},
-                                         {1.f, 1.f, 1.f});
+                                                          positions_world_buffer.at(position),
+                                                          normals_world_buffer.at(position),
+                                                          diffuse_buffer.at(position),
+                                                          diffuse_buffer.at(position),
+                                                          diffuse_buffer.at(position),
+                                                          1.f,
+                                                          {-1.f, 0.f, 0.f},
+                                                          {0.5f, 0.5f, 0.5f},
+                                                          {0.5f, 0.5f, 0.5f},
+                                                          {1.f, 1.f, 1.f});
         });
         window.draw(screen_buffer);
     }
