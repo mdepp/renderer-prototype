@@ -14,7 +14,12 @@
 #include <cmath>
 #include <chrono>
 #include "Model.hpp"
+#include <boost/range/irange.hpp>
+#include "config.h"
 
+
+#include <spdlog/spdlog.h>
+#include <spdlog/sinks/base_sink.h>
 
 using buffer::Buffer;
 using app::ApplicationWindow;
@@ -23,25 +28,25 @@ using namespace std::filesystem;
 
 void apply_matrix(const std::vector<glm::vec3>& vertices, const glm::mat4& matrix, std::vector<glm::vec4>& result) {
     result.resize(vertices.size());
-    std::transform(vertices.cbegin(), vertices.cend(), result.begin(), [&matrix](const auto& vertex) {
+    std::transform(config::par_unseq, vertices.cbegin(), vertices.cend(), result.begin(), [&matrix](const auto& vertex) {
         return matrix * glm::vec4(vertex, 1.f);
     });
 }
 void apply_matrix(const std::vector<glm::vec3>& vertices, const glm::mat4& matrix, std::vector<glm::vec3>& result) {
     result.resize(vertices.size());
-    std::transform(vertices.cbegin(), vertices.cend(), result.begin(), [&matrix](const auto& vertex) {
+    std::transform(config::par_unseq, vertices.cbegin(), vertices.cend(), result.begin(), [&matrix](const auto& vertex) {
         return glm::vec3(matrix * glm::vec4(vertex, 1.f));
     });
 }
 void apply_matrix_linear(const std::vector<glm::vec3>& vertices, const glm::mat4& matrix, std::vector<glm::vec3>& result) {
     result.resize(vertices.size());
-    std::transform(vertices.cbegin(), vertices.cend(), result.begin(), [&matrix](const auto& vertex) {
+    std::transform(config::par_unseq, vertices.cbegin(), vertices.cend(), result.begin(), [&matrix](const auto& vertex) {
         return glm::vec3(matrix * glm::vec4(vertex, 0.f));
     });
 }
 void apply_matrix(const std::vector<glm::vec2>& vertices, const glm::mat3& matrix, std::vector<glm::vec2>& result) {
     result.resize(vertices.size());
-    std::transform(vertices.cbegin(), vertices.cend(), result.begin(), [&matrix](const auto& vertex) {
+    std::transform(config::par_unseq, vertices.cbegin(), vertices.cend(), result.begin(), [&matrix](const auto& vertex) {
         return glm::vec2(matrix * glm::vec3(vertex, 1.f));
     });
 }
@@ -143,7 +148,7 @@ void for_each_pixel(const Face<glm::vec2>& face_window, const Face<glm::vec4>& f
  */
 void perspective_divide(const std::vector<glm::vec4>& positions_clip, std::vector<glm::vec2>& positions_ndc) {
     positions_ndc.resize(positions_clip.size());
-    std::transform(positions_clip.cbegin(), positions_clip.cend(), positions_ndc.begin(), [](const glm::vec4& position_clip) {
+    std::transform(config::par_unseq, positions_clip.cbegin(), positions_clip.cend(), positions_ndc.begin(), [](const glm::vec4& position_clip) {
         return glm::vec2(position_clip / position_clip.w);
     });
 }
@@ -164,7 +169,8 @@ void fragment_shader_pass(const std::vector<size_t>& indices, const std::vector<
     assert(indices.size()%3 == 0);
     assert(positions_window.size() == positions_clip.size());
 
-    for (size_t i=0; i<indices.size(); i += 3) {
+    const auto face_range = boost::irange((size_t)0, indices.size(), 3);
+    std::for_each(config::par_unseq, face_range.begin(), face_range.end(), [&](const size_t i) {
         const auto i1 = indices[i];
         const auto i2 = indices[i+1];
         const auto i3 = indices[i+2];
@@ -173,7 +179,7 @@ void fragment_shader_pass(const std::vector<size_t>& indices, const std::vector<
         for_each_pixel(face_window, face_clip, [&](const glm::ivec2& position_window, const glm::vec3& barycentric) {
             functor(glm::ivec3(i1, i2, i3), position_window, barycentric);
         });
-    }
+    });
 }
 
 /**
@@ -359,7 +365,9 @@ int main() {
     ApplicationWindow window(SCREEN_WIDTH, SCREEN_HEIGHT);
 
     const auto start_time = std::chrono::system_clock::now();
+    auto elapsed_frames = 0;
     while (window.poll_events()) {
+        ++elapsed_frames;
         // Update model transform
         const auto elapsed_seconds = std::chrono::duration<float>(std::chrono::system_clock::now() - start_time).count();
         const auto theta = elapsed_seconds / ROTATION_PERIOD * TAU;
@@ -369,6 +377,10 @@ int main() {
             {std::sin(theta), 0.f, std::cos(theta), -2.f},
             {0.f,             0.f, 0.f,              1.f}
         });
+
+        if (elapsed_frames % 100 == 0) {
+            spdlog::info("FPS: {}", elapsed_frames / elapsed_seconds);
+        }
 
         depth_buffer.clear();
         positions_world_buffer.clear();

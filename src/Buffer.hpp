@@ -5,6 +5,8 @@
 #include <cstdio>
 #include <glm/glm.hpp>
 #include <vector>
+#include <boost/range/irange.hpp>
+#include "config.h"
 
 
 namespace buffer {
@@ -77,12 +79,14 @@ namespace buffer {
          */
         template<typename Functor>
         void for_each_pixel(Functor &&functor) const {
-            glm::ivec2 position;
-            for (position.y = 0; position.y < m_height; ++position.y) {
-                for (position.x = 0; position.x < m_width; ++position.x) {
-                    functor(position);
-                }
-            }
+            const auto y_range = boost::irange(m_height);
+            const auto x_range = boost::irange(m_width);
+
+            std::for_each(config::par_unseq, y_range.begin(), y_range.end(), [&](const int y) {
+                std::for_each(config::unseq, x_range.begin(), x_range.end(), [&](const int x) {
+                    functor({x, y});
+                });
+            });
         }
 
         /**
