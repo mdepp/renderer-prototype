@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD 20)
 find_package(SDL2 REQUIRED)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/sdl2-cmake-scripts")
 find_package(SDL2_image REQUIRED)
-find_package(Assimp REQUIRED)
+find_package(assimp REQUIRED)
 find_package(spdlog REQUIRED)
 find_package(Microsoft.GSL CONFIG)
 

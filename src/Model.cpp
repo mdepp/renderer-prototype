@@ -22,7 +22,7 @@ namespace model {
         const auto* material = scene->mMaterials[in_mesh->mMaterialIndex];
         const auto texture_count = material->GetTextureCount(texture_type);
         if (texture_count > 1) {
-            spdlog::warn("Material has {} {} textures, but only 0 or 1 is supported", texture_count, texture_type);
+            spdlog::warn("Material has {} {} textures, but only 0 or 1 is supported", static_cast<int>(texture_count), static_cast<int>(texture_type));
         }
         has_texture = (texture_count != 0);
         if (has_texture) {
